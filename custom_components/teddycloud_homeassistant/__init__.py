@@ -6,6 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from .const import DOMAIN, CONF_PREFIX, CONF_BOX_ID
 from .online_catalog import OnlineCatalog
 from .card_registration import async_register_card
+from .cleanup import async_remove_owned_data
 
 FIELDS = {"Playback", "ContentTitle", "ContentAudioId", "VolumeLevel", "VolumedB", "Charger", "TagValid", "LastSeen", "ContentPicture"}
 
@@ -49,3 +50,8 @@ async def async_unload_entry(hass, entry):
     if unloaded:
         hass.data[DOMAIN].pop(entry.entry_id, None)
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove integration-owned data when a configuration entry is deleted."""
+    await async_remove_owned_data(hass, entry.entry_id)

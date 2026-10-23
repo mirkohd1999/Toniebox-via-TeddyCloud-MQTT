@@ -221,3 +221,30 @@ Entität zeigt die Karte einen Platzhalter statt eines Konfigurationsfehlers.
 `custom:teddycloud-homeassistant-card`. Andere Toniebox-Karten haben
 einen eigenen Editor; das Einspielen dieser Integration verändert deren
 englische Texte und Validierungen nicht.
+
+
+## Saubere Deinstallation
+
+**Reihenfolge:** In Home Assistant unter **Einstellungen → Geräte & Dienste →
+TeddyCloud Home Assistant** die Box-Einträge entfernen, **erst danach** das
+Repository aus HACS deinstallieren. Dadurch kann `async_remove_entry` ausgeführt
+werden. Werden lediglich die Integrationsdateien über HACS entfernt, ohne vorher
+die Einträge zu löschen, läuft die Bereinigungsroutine möglicherweise nicht.
+
+Wenn die **letzte** TeddyCloud-Box entfernt wird, löscht die Integration
+automatisch ihre eigene Lovelace-Ressource (nur Storage-Modus) und Bilder aus
+`/config/www/teddycloud_homeassistant/figures`, die nach numerischer Audio-ID
+und mit unterstützter Bilddateiendung benannt sind. Unbekannte und
+selbst hinzugefügte Dateien bleiben bestehen. Home Assistant verwaltet und
+entfernt beim Löschen des Eintrags die zugehörigen Entitäten und Geräte.
+
+**Dashboard-Karten:** Manuell erstellte Dashboard-Karten sind Bestandteil
+deiner eigenen Dashboard-Konfiguration. Sie werden aus Sicherheitsgründen
+nicht ungefragt verändert oder gelöscht; entferne solche Karten vor der
+Deinstallation über **Dashboard bearbeiten**. Die Integration kann weder
+YAML-verwaltete Dashboards noch eigene externe Bildarchive sicher automatisch
+löschen. Mehrere konfigurierte Boxen behalten gemeinsame Ressourcen, bis die
+letzte Box entfernt wurde.
+
+Hinweis: Die lokale Bildarchiv-Funktion wird separat entwickelt und ist
+nicht in jedem bereits veröffentlichten Stand enthalten.
