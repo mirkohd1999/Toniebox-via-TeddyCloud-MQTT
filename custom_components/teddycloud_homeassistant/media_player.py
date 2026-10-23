@@ -63,30 +63,43 @@ class BoxPlayer(MediaPlayerEntity):
         return DeviceInfo(identifiers={(DOMAIN, self.entry.unique_id)}, name=self.entry.data[CONF_BOX_NAME], manufacturer='TeddyCloud', model='MQTT box monitor')
 
     def receive(self, field, payload):
+        """Accept asynchronous MQTT metadata without mixing two figurines."""
         text = mqtt_text(payload)
         previous = self._values.get(field)
-        # Clear active metadata on removal. Archived images remain on disk.
-        # Never display the previous figurine as the currently playing one.
-        if field == 'ContentAudioId' and text != previous:
-            self._values['ContentTitle'] = ''
-            self._values['ContentPicture'] = ''
-            self._online_result = None
-            self._local_artwork = self._archive.lookup(text) if text and self._archive else None
+        if field == 'TagValid':
+            if text.startswith('-'):
+                self._set_figure_removed()
+            elif text:
+                # A repeated TagValid is not another figure change.
+                # Keep metadata already delivered before the tag event.
+                self._figure_present = True
+                self._figure_removed_at = None
+        elif field == 'TagInvalid' and text.startswith('-'):
+            self._set_figure_removed()
+        elif field == 'ContentAudioId':
+            if text and text != previous:
+                # Keep title/picture that may have arrived before the audio ID.
+                self._online_result = None
+                self._local_artwork = self._archive.lookup(text) if self._archive else None
+                self._online_audio_id = text
+                if self._lookup_task and not self._lookup_task.done():
+                    self._lookup_task.cancel()
+                if self.entry.options.get('online_images', True) and self.hass is not None:
+                    self._lookup_task = self.hass.async_create_task(self._lookup_image(text))
+                if self._was_playing:
+                    self._started = datetime.now(timezone.utc)
+            elif not text and previous:
+                self._set_figure_removed()
+            if text:
+                self._figure_present = True
+                self._figure_removed_at = None
+        elif field in ('ContentTitle', 'ContentPicture') and text:
+            self._figure_present = True
+            self._figure_removed_at = None
+
+        # When a new audio ID arrives without an intervening removal event,
+        # never preserve artwork belonging to the previous ID.
         self._values[field] = text
-        if field == 'TagValid' and text and not text.startswith('-'):
-            self._figure_present = True
-            self._figure_removed_at = None
-        if field == 'ContentAudioId' and text:
-            self._figure_present = True
-            self._figure_removed_at = None
-        if field == 'ContentAudioId' and not text:
-            self._figure_present = False
-            self._figure_removed_at = datetime.now(timezone.utc)
-        if field == 'ContentAudioId' and not text:
-            self._online_audio_id = None
-            if self._lookup_task and not self._lookup_task.done():
-                self._lookup_task.cancel()
-            self._started = None
         if field == 'Playback':
             playing = text.upper() in ('ON', '1', 'TRUE', 'PLAYING')
             if playing and not self._was_playing:
@@ -94,18 +107,24 @@ class BoxPlayer(MediaPlayerEntity):
             if not playing:
                 self._started = None
             self._was_playing = playing
-        if field == 'ContentAudioId' and previous != text:
-            self._online_result = None
-            self._local_artwork = self._archive.lookup(text) if self._archive else None
-            self._online_audio_id = text
-            if self._was_playing:
-                self._started = datetime.now(timezone.utc)
-            if text and self.entry.options.get('online_images', True) and self.hass is not None:
-                if self._lookup_task and not self._lookup_task.done():
-                    self._lookup_task.cancel()
-                self._lookup_task = self.hass.async_create_task(self._lookup_image(text))
         if self.hass is not None:
             self.async_write_ha_state()
+
+    def _clear_content(self):
+        self._values['ContentAudioId'] = ''
+        self._values['ContentTitle'] = ''
+        self._values['ContentPicture'] = ''
+        self._online_audio_id = None
+        self._online_result = None
+        self._local_artwork = None
+        if self._lookup_task and not self._lookup_task.done():
+            self._lookup_task.cancel()
+
+    def _set_figure_removed(self):
+        self._clear_content()
+        self._figure_present = False
+        self._figure_removed_at = datetime.now(timezone.utc)
+        self._started = None
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()

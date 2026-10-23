@@ -8,7 +8,7 @@ from .online_catalog import OnlineCatalog
 from .card_registration import async_register_card
 from .cleanup import async_remove_owned_data
 
-FIELDS = {"Playback", "ContentTitle", "ContentAudioId", "VolumeLevel", "VolumedB", "Charger", "TagValid", "LastSeen", "ContentPicture"}
+FIELDS = {"Playback", "ContentTitle", "ContentAudioId", "VolumeLevel", "VolumedB", "Charger", "TagValid", "TagInvalid", "LastSeen", "ContentPicture"}
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not await mqtt.async_wait_for_mqtt_client(hass):
