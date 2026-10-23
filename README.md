@@ -245,3 +245,22 @@ Passende Figurenbilder werden bei Bedarf in `/config/www/teddycloud_homeassistan
 Beim Entfernen der **letzten** TeddyCloud-Home-Assistant-Konfiguration wird die von der Integration registrierte Lovelace-Ressource entfernt und das integrationsinterne Bilderverzeichnis von automatisch gespeicherten, numerisch benannten PNG-, JPEG- und WebP-Dateien bereinigt. Andere Bilder werden nicht angerührt. Bereits manuell in Dashboards angelegte Karten bleiben zu deren Schutz bestehen und müssen über den Dashboard-Editor entfernt werden. Entferne zuerst die Integration unter **Geräte & Dienste** und erst danach die Dateien über HACS; eine reine HACS-Deinstallation führt den Aufräumcode nicht garantiert aus.
 
 Ungetesteter Entwicklungsstand: vor stabilem Release Home-Assistant-Installation und mehrere Boxen testen.
+
+
+## Automatische Laufzeit aus dem Tonies-Katalog (Entwicklung)
+
+Bei neuer `ContentAudioId` durchsucht die Integration denselben öffentlichen
+[Tonies-Metadatenkatalog](https://github.com/toniebox-reverse-engineering/tonies-json),
+den sie für Figurenbilder nutzt. Enthält ein **exakt passender** Datensatz
+eine eindeutig interpretierbare Laufzeit (`duration_seconds` in Sekunden
+oder `runtime` / `runTime` in Minuten), wird sie als
+`media_duration` der Home-Assistant-Media-Player-Entität angezeigt.
+Ein manuell angegebener `duration_seconds`-Wert im Figurenkatalog
+hat Vorrang.
+
+Damit kann die Karte die Laufzeit und eine **geschätzte**
+Wiedergabe-Fortschrittsleiste anzeigen. Der Startzeitpunkt wird aus
+MQTT-`Playback=ON` abgeleitet, ist also keine echte Abspielposition.
+Ohne verlässliche Katalog-Laufzeit bleibt die Anzeige
+„Laufzeit unbekannt“. **Die Community-Datenbank garantiert
+nicht für jeden Tonie eine Laufzeit.**

@@ -157,8 +157,15 @@ class BoxPlayer(MediaPlayerEntity):
 
     @property
     def media_duration(self):
-        duration = self._metadata().get('duration_seconds')
-        return duration if isinstance(duration, (int, float)) and duration > 0 else None
+        manual = self._metadata().get('duration_seconds')
+        if isinstance(manual, (int, float)) and not isinstance(manual, bool) and 0 < manual <= 86400:
+            return int(manual)
+        # Only use catalog metadata for the current exact audio ID.
+        if self._online_audio_id == self._values.get('ContentAudioId'):
+            catalog = (self._online_result or {}).get('duration_seconds')
+            if isinstance(catalog, (int, float)) and not isinstance(catalog, bool) and 0 < catalog <= 86400:
+                return int(catalog)
+        return None
 
     @property
     def media_image_url(self):
@@ -190,5 +197,7 @@ class BoxPlayer(MediaPlayerEntity):
                              'teddycloud_cover' if self._values.get('ContentPicture') else 'fallback'),
             'estimated_playback_started': self._started.isoformat() if self._started else None,
             'progress_is_estimate': True,
+            'duration_source': ('manual_catalog' if self._metadata().get('duration_seconds') else
+                                'tonies_catalog' if self.media_duration is not None else None),
             'playback_control_available': False,
         }

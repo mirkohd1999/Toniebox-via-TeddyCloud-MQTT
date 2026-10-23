@@ -14,6 +14,28 @@ REFRESH = timedelta(hours=24)
 RETRY = timedelta(hours=1)
 MAX_SIZE = 30 * 1024 * 1024
 
+
+def catalog_duration_seconds(entry):
+    """Return a duration only when the catalog provides an unambiguous value.
+
+    No estimated minutes based on track counts or audio file sizes.
+    """
+    value = entry.get("duration_seconds")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value) if 0 < value <= 24 * 3600 else None
+    # Some catalog releases include a runtime in minutes as a scalar.
+    value = entry.get("runtime") or entry.get("runTime")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return int(value * 60) if 0 < value <= 24 * 60 else None
+    # ISO 8601 runtimes may appear on third-party metadata records.
+    if isinstance(value, str):
+        import re
+        match = re.fullmatch(r"PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?", value)
+        if match and any(match.groups()):
+            seconds = sum(int(part or 0) * factor for part, factor in zip(match.groups(), (3600, 60, 1)))
+            return seconds if 0 < seconds <= 24 * 3600 else None
+    return None
+
 class OnlineCatalog:
     def __init__(self, hass):
         self.hass = hass
@@ -58,7 +80,9 @@ class OnlineCatalog:
                     if not isinstance(entry, dict):
                         continue
                     pic = entry.get("pic")
-                    if not isinstance(pic, str) or not pic.startswith("https://"):
+                    image = pic if isinstance(pic, str) and pic.startswith("https://") else None
+                    duration = catalog_duration_seconds(entry)
+                    if not image and not duration:
                         continue
                     ids = entry.get("audio_id") or []
                     if not isinstance(ids, list):
@@ -66,7 +90,7 @@ class OnlineCatalog:
                     for aid in ids:
                         key = str(aid).strip()
                         if key and key not in new_items:
-                            new_items[key] = {"figure": pic, "catalog_title": str(entry.get("title") or "")}
+                            new_items[key] = {"figure": image, "catalog_title": str(entry.get("title") or ""), "duration_seconds": duration}
                 self.items = new_items
                 self.fetched_at = dt_util.utcnow()
                 self.failed_at = None
