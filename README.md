@@ -221,3 +221,32 @@ Entität zeigt die Karte einen Platzhalter statt eines Konfigurationsfehlers.
 `custom:teddycloud-homeassistant-card`. Andere Toniebox-Karten haben
 einen eigenen Editor; das Einspielen dieser Integration verändert deren
 englische Texte und Validierungen nicht.
+
+
+## Lokales Figurenbild-Archiv (in Entwicklung)
+
+Wenn TeddyCloud eine Tonie-`ContentAudioId` sendet und die öffentliche
+Tonies-Metadatendatenbank ein passendes Figurenbild liefert, lädt Home
+Assistant das Bild nach Möglichkeit **einmal** herunter und speichert
+es unter `/config/www/teddycloud_homeassistant/figures/<Audio-ID>.<Dateiendung>`.
+Die Dateien bleiben nach Home-Assistant-Neustarts erhalten. Die Karte
+bevorzugt das lokale Bild über `/local/teddycloud_homeassistant/figures/...`;
+fällt der externe Host aus, bleibt das bereits gespeicherte Bild sichtbar.
+
+Es werden nur Bilder von exakt passenden Audio-IDs übernommen. Fehlende,
+gesperrte oder nicht erreichbare Bildquellen können **nicht** garantiert
+werden; dann nutzt die Karte weiterhin das TeddyCloud-Cover oder ihr
+Platzhalterbild. Unterstützte Bildformate: PNG, JPEG und WebP,
+maximal 3 MB pro Figur. Nur beim ersten erfolgreichen Abruf ist
+Internet nötig. Das letzte erkannte Figurenbild und der Titel bleiben
+auch nach Abnehmen der Figur sichtbar; die Wiedergabe zeigt dennoch
+korrekt Leerlauf an.
+
+Die **Toniebox** selbst ist in der Lovelace-Karte als stilisierte
+Grafik fest eingebaut und übernimmt die `box_color`-Option oder
+die optionale `color`-Einstellung der Karte. Deshalb ist dafür
+kein Internet oder Produktbild notwendig.
+
+Hinweis: Lokales Speichern fremder Bilder erfordert die Beachtung
+der Lizenz- und Nutzungsrechte. Der Cache ist optional
+und legt keine Bilddaten ins GitHub-Repository.

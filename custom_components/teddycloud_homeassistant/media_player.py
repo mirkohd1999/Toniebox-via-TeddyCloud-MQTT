@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
 from homeassistant.components.media_player import MediaPlayerEntity, MediaPlayerEntityFeature, MediaPlayerState
 from homeassistant.helpers.entity import DeviceInfo
+from .artwork_archive import ArtworkArchive
 from .const import (DOMAIN, CONF_BOX_NAME, CONF_BOX_COLOR, CONF_CATALOG, CONF_FALLBACK_COVER, DEFAULT_COLOR)
 
 
@@ -44,6 +45,8 @@ class BoxPlayer(MediaPlayerEntity):
     def __init__(self, entry, online_catalog):
         self.entry = entry
         self._online_catalog = online_catalog
+        self._archive = None
+        self._local_artwork = None
         self._online_result = None
         self._online_audio_id = None
         self._lookup_task = None
@@ -60,6 +63,10 @@ class BoxPlayer(MediaPlayerEntity):
     def receive(self, field, payload):
         text = mqtt_text(payload)
         previous = self._values.get(field)
+        # Empty metadata means a removed Tonie: keep the last known artwork/title
+        # in the dashboard, while Playback still correctly changes to idle.
+        if field in ('ContentTitle', 'ContentAudioId', 'ContentPicture') and not text:
+            return
         self._values[field] = text
         if field == 'Playback':
             playing = text.upper() in ('ON', '1', 'TRUE', 'PLAYING')
@@ -70,6 +77,7 @@ class BoxPlayer(MediaPlayerEntity):
             self._was_playing = playing
         if field == 'ContentAudioId' and previous != text:
             self._online_result = None
+            self._local_artwork = self._archive.lookup(text) if self._archive else None
             self._online_audio_id = text
             if self._was_playing:
                 self._started = datetime.now(timezone.utc)
@@ -82,6 +90,7 @@ class BoxPlayer(MediaPlayerEntity):
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
+        self._archive = self.hass.data.setdefault(DOMAIN, {}).setdefault('artwork_archive', ArtworkArchive(self.hass))
         audio_id = self._values.get('ContentAudioId')
         if audio_id and self.entry.options.get('online_images', True):
             self._online_audio_id = audio_id
@@ -100,10 +109,13 @@ class BoxPlayer(MediaPlayerEntity):
             result = await self._online_catalog.find(audio_id)
         except Exception:
             return
+        cached = self._archive.lookup(audio_id) if self._archive else None
+        if not cached and result and result.get('figure') and self._archive:
+            cached = await self._archive.store(audio_id, result['figure'])
         if self._online_audio_id == audio_id and self.hass is not None:
             self._online_result = result
-            if self.hass is not None:
-                self.async_write_ha_state()
+            self._local_artwork = cached
+            self.async_write_ha_state()
 
     @property
     def state(self):
@@ -132,7 +144,7 @@ class BoxPlayer(MediaPlayerEntity):
         custom = self._metadata()
         # User-defined figurine photo overrides catalog; exact Audio-ID match
         # preferred over the book/episode cover reported by TeddyCloud.
-        figure = custom.get('figure') or (self._online_result or {}).get('figure')
+        figure = custom.get('figure') or self._local_artwork or (self._online_result or {}).get('figure') or (self._archive.lookup(self._values.get('ContentAudioId')) if self._archive else None)
         url = figure or custom.get('cover') or self._values.get('ContentPicture') or self.entry.options.get(CONF_FALLBACK_COVER, '')
         return resolved_picture(url, self.entry.options.get('teddycloud_url', ''))
 
@@ -148,6 +160,7 @@ class BoxPlayer(MediaPlayerEntity):
             'box_color': self.entry.options.get(CONF_BOX_COLOR, DEFAULT_COLOR),
             'cover_url': self.media_image_url,
             'image_source': ('manual_figure' if self._metadata().get('figure') else
+                             'local_archive' if self._local_artwork else
                              'online_catalog' if (self._online_result or {}).get('figure') else
                              'teddycloud_cover' if self._values.get('ContentPicture') else 'fallback'),
             'estimated_playback_started': self._started.isoformat() if self._started else None,
